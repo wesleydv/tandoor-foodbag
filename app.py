@@ -12,11 +12,11 @@ import_statuses = {}
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tandoor Recipe Import</title>
+    <title>Tandoor Recept Importeren</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -100,12 +100,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </head>
 <body>
     <div class="container">
-        <h1>Tandoor Recipe Import</h1>
-        <p class="subtitle">Paste a recipe URL to import it into Tandoor</p>
+        <h1>Tandoor Recept Importeren</h1>
+        <p class="subtitle">Plak een recept URL om het te importeren in Tandoor</p>
 
         <form id="import-form">
             <input type="url" name="url" placeholder="https://foodbag.be/..." required>
-            <button type="submit" id="submit-btn">Import Recipe</button>
+            <button type="submit" id="submit-btn">Recept Importeren</button>
         </form>
 
         <div class="result" id="result"></div>
@@ -120,11 +120,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         function showResult(type, message) {
             result.className = 'result ' + type;
             if (type === 'info') {
-                result.innerHTML = '<strong>Importing...</strong>' + message;
+                result.innerHTML = '<strong>Bezig met importeren...</strong>' + message;
             } else if (type === 'success') {
-                result.innerHTML = '<strong>Recipe imported successfully!</strong><a href="' + message.link + '" target="_blank" rel="noopener">' + message.text + '</a>';
+                result.innerHTML = '<strong>Recept succesvol geïmporteerd!</strong><a href="' + message.link + '" target="_blank" rel="noopener">' + message.text + '</a>';
             } else {
-                result.innerHTML = '<strong>Error</strong>' + message;
+                result.innerHTML = '<strong>Foutmelding</strong>' + message;
             }
             btn.disabled = false;
         }
@@ -136,7 +136,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             result.className = 'result';
             btn.disabled = true;
-            showResult('info', '<span class="spinner"></span> Scraping recipe and importing...');
+            showResult('info', '<span class="spinner"></span> Recept ophalen en importeren...');
 
             try {
                 const res = await fetch('/import', {
@@ -149,15 +149,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (data.status === 'queued') {
                     pollStatus(data.id);
                 } else if (!res.ok) {
-                    showResult('error', data.error || 'Request failed');
+                    showResult('error', data.error || 'Aanvraag mislukt');
                 } else {
                     showResult('success', {
-                        text: "Open recipe #" + data.recipe_id + " in Tandoor",
+                        text: "Open recept #" + data.recipe_id + " in Tandoor",
                         link: data.recipe_url
                     });
                 }
             } catch (err) {
-                showResult('error', 'Could not reach the server. Make sure it is running.');
+                    showResult('error', 'Kan de server niet bereiken. Zorg dat deze draait.');
             }
         });
 
@@ -168,22 +168,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const data = await res.json();
 
                 if (data.status === 'running' || data.status === 'queued') {
-                    showResult('info', '<span class="spinner"></span> Wait a moment...');
+                    showResult('info', '<span class="spinner"></span> Wacht een moment...');
                     continue;
                 }
                 if (data.status === 'complete') {
                     if (data.success) {
-                        showResult('success', {
-                            text: "Open recipe #" + data.recipe_id + " in Tandoor",
-                            link: data.recipe_url
+                    showResult('success', {
+                        text: "Open recept #" + data.recipe_id + " in Tandoor",
+                        link: data.recipe_url
                         });
                     } else {
-                        showResult('error', data.error || 'Import failed');
+                        showResult('error', data.error || 'Import mislukt');
                     }
                     return;
                 }
                 if (data.status === 'error' || !data.status) {
-                    showResult('error', data.error || 'Unknown error occurred');
+                    showResult('error', data.error || 'Onbekende fout opgetreden');
                     return;
                 }
             }
