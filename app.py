@@ -47,8 +47,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             margin-bottom: 32px;
         }
         input[type="url"] {
-            width: 100%;
-            padding: 12px 16px;
+            height: 46px;
+            flex: 1;
+            min-width: 0;
+            padding: 0 16px;
             border: 2px solid #e5e5e5;
             border-radius: 8px;
             font-size: 15px;
@@ -57,6 +59,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
         input[type="url"]:focus {
             border-color: #ff6b35;
+        }
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .qr-btn {
+            height: 46px;
+            width: auto;
+            padding: 0 20px;
+            margin: 0px;
+            background: #3550a3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
         }
         button {
             width: 100%;
@@ -97,6 +116,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -104,11 +124,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <p class="subtitle">Plak een recept URL om het te importeren in Tandoor</p>
 
         <form id="import-form">
-            <input type="url" name="url" placeholder="https://foodbag.be/..." required>
+            <div class="input-row">
+                <input type="url" name="url" placeholder="https://foodbag.be/..." required>
+                <button type="button" class="qr-btn" id="qr-btn">Scan QR</button>
+            </div>
             <button type="submit" id="submit-btn">Recept Importeren</button>
         </form>
 
         <div class="result" id="result"></div>
+    </div>
+
+    <div id="qr-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;">
+        <div style="position:relative;background:white;border-radius:12px;padding:16px;max-width:400px;width:90%;">
+            <button id="qr-close" style="position:absolute;top:-10px;right:-10px;width:32px;height:32px;margin:0;padding:0;background:#ff6b35;color:white;border:none;border-radius:50%;font-size:18px;font-weight:bold;cursor:pointer;z-index:1;">&times;</button>
+            <div id="qr-reader"></div>
+        </div>
     </div>
 
     <script>
@@ -189,6 +219,59 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
             showResult('error', 'Import timed out. Try again later.');
         }
+
+        // QR Scanner
+        const qrOverlay = document.getElementById('qr-overlay');
+        const qrBtn = document.getElementById('qr-btn');
+        const qrClose = document.getElementById('qr-close');
+        let html5QrcodeScanner = null;
+
+        function startScanner() {
+            qrOverlay.style.display = 'flex';
+            qrOverlay.style.justifyContent = 'center';
+            qrOverlay.style.alignItems = 'center';
+            
+            html5QrcodeScanner = new Html5Qrcode('qr-reader');
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
+            };
+            
+            html5QrcodeScanner.start(
+                { facingMode: 'user' },
+                config,
+                (decodedText) => {
+                    input.value = decodedText;
+                    stopScanner();
+                    document.getElementById('import-form').scrollIntoView({ behavior: 'smooth' });
+                },
+                (errorMessage) => {
+                    // Scan error - ignore
+                }
+            ).catch(err => {
+                console.error('QR scanner failed:', err);
+                alert('Geen camera gevonden of toegang geweigerd.');
+                stopScanner();
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                    html5QrcodeScanner = null;
+                }).catch(err => {
+                    console.error('Error stopping QR scanner:', err);
+                });
+                
+            }
+            qrOverlay.style.display = 'none';
+        }
+
+        qrBtn.addEventListener('click', startScanner);
+        qrClose.addEventListener('click', stopScanner);
+
     </script>
 </body>
 </html>"""
@@ -297,9 +380,8 @@ if __name__ == "__main__":
     app.config["API_TOKEN"] = api_token
 
     import time
-    print(f"Starting server at http://127.0.0.1:9615")
+    print(f"Starting server at http://0.0.0.0:9615")
     print(f"Tandoor URL: {tandoor_url}")
     time.sleep(0.5)
     import webbrowser
-    webbrowser.open("http://127.0.0.1:9615")
-    app.run(host="127.0.0.1", port=9615, debug=False)
+    app.run(host="0.0.0.0", port=9615, debug=False)
