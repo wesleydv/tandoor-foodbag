@@ -199,18 +199,47 @@ class FoodbagScraper:
     def ingredients(self):
         if not self.soup: return []
         ingredients = []
-        header = self.soup.find(lambda t: t.name == 'p' and 'ingrediënten' in t.text.lower())
-        if not header: return []
 
-        curr = header
-        while curr:
-            curr = curr.find_next()
-            if not curr or 'Bereiding' in curr.text: break
-            if curr.name == 'h6':
-                name = curr.text.strip()
-                qty_tag = curr.find_next('p', class_='text-[#A8A8A8]')
-                if qty_tag:
-                    ingredients.append(f"{qty_tag.text.strip()} {name}")
+        # Main ingredients: <h6> names with text-[#A8A8A8] quantity markers
+        for h6 in self.soup.find_all('h6'):
+            name = h6.get_text().strip()
+            if not name or len(name) < 2:
+                continue
+
+            # Skip non-ingredient h6 (labels, times, allergen text)
+            if any(skip in name for skip in ['Chef', 'NL']):
+                continue
+            # Skip standalone times like "30'"
+            clean = name.replace("'", "").replace('"', '').replace('\u2018', '').replace('\u2019', '').replace('\u2032', '')
+            if clean.strip().isdigit():
+                continue
+            # Skip allergen info
+            if 'raadpleeg' in name.lower():
+                continue
+
+            # Search in parent chain for quantity
+            parent = h6.parent
+            while parent:
+                qty_div = parent.find(class_='text-[#A8A8A8]')
+                if qty_div:
+                    txt = qty_div.get_text().strip()
+                    if txt and any(c.isdigit() or c in '/mlgc' for c in txt[:3]):
+                        ingredients.append(f"{txt} {name}")
+                        break
+                parent = parent.parent
+
+        # "Uit jouw keuken": first <details> accordion (item 0 in both recipes)
+        details_list = self.soup.find_all('details')
+        if details_list:
+            first = details_list[0]
+            # Find comma-separated content in child divs
+            for div in first.find_all('div'):
+                text = div.get_text().strip()
+                if ',' in text and 'raadpleeg' not in text.lower():
+                    items = [item.strip() for item in text.split(',') if item.strip()]
+                    ingredients.extend(items)
+                    break
+
         return ingredients
 
     @property
