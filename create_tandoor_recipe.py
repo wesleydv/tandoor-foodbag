@@ -7,6 +7,8 @@ import io
 import requests
 from typing import Optional
 
+# Tandoor credentials — override via env vars or CLI flags
+
 
 class TandoorClient:
     def __init__(self, url: str, api_token: str):
@@ -18,17 +20,19 @@ class TandoorClient:
 
     def create_recipe(self, data: dict) -> int:
         cleaned = self._clean_payload(data)
-        r = requests.post(
-            f"{self.url}/api/recipe/",
-            json=cleaned,
-            headers={**self.headers, "Content-Type": "application/json"},
-        )
-        r.raise_for_status()
-        return r.json()["id"]
+        try:
+            r = requests.post(
+                f"{self.url}/api/recipe/",
+                json=cleaned,
+                headers={**self.headers, "Content-Type": "application/json"},
+            )
+            r.raise_for_status()
+            return r.json()["id"]
+        except requests.exceptions.HTTPError as e:
+            print(f"[ERROR] API request failed ({r.status_code}): {r.text}", file=sys.stderr)
+            raise SystemExit(1)
 
     def _clean_payload(self, obj, allow_keys=None):
-        """Clean payload: strip nulls/defaults everywhere except 'food' keys and user-specified allow_keys."""
-        # For ingredients (has 'food'), keep ALL fields exactly as-is
         if isinstance(obj, dict) and 'food' in obj:
             return obj
 
@@ -38,26 +42,29 @@ class TandoorClient:
                 result[k] = self._clean_payload(v, allow_keys=allow_keys)
             elif isinstance(v, list):
                 cleaned_list = [self._clean_payload(i, allow_keys=allow_keys) for i in v]
-                # For 'name' and 'instruction', also allow empty strings
                 if k == 'name' or k == 'instruction':
                     result[k] = '[{}]' if not any(x is not None and x != {} for x in cleaned_list) else cleaned_list
                 else:
                     result[k] = [x for x in cleaned_list if x is not None]
             else:
                 result[k] = v
-
         return result
 
-    def upload_image(self, recipe_id: int, image_url: Optional[str]) -> None:
+    def upload_image(self, recipe_id: int, image_url):
         if not image_url:
             return
-        img = requests.get(image_url, headers={"User-Agent": "Mozilla/5.0"})
-        r = requests.put(
-            f"{self.url}/api/recipe/{recipe_id}/image/",
-            files={"image": ("pita.jpg", io.BytesIO(img.content), "image/jpeg")},
-            headers=self.headers  # no Content-Type, let requests set multipart boundary
-        )
-        r.raise_for_status()
+        try:
+            img = requests.get(image_url, headers={"User-Agent": "Mozilla/5.0"})
+            r = requests.put(
+                f"{self.url}/api/recipe/{recipe_id}/image/",
+                files={"image": ("pita.jpg", io.BytesIO(img.content), "image/jpeg")},
+                headers=self.headers
+            )
+            r.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Image upload failed ({e})", file=sys.stderr)
+            raise SystemExit(1)
+
 
 
 def parse_unit(unit_str: str) -> Optional[str]:
@@ -156,9 +163,7 @@ def scraped_to_tandoor(scraper, html: str):
             "ingredients": step_ingredients,
         })
 
-    # scraper.total_time is in seconds; Tandoor API expects minutes
-    total = scraper.total_time or 60 if isinstance(scraper.total_time, int) else 1 * 60
-    working_minutes = max(1, total // 60)
+    working_minutes = max(1, scraper.total_time) if scraper.total_time else 1
 
     parts = []
     if scraper.subtitle:
@@ -167,7 +172,11 @@ def scraped_to_tandoor(scraper, html: str):
         parts.append(scraper.description)
     if scraper.tip:
         parts.append(f"Chef's tip: {scraper.tip}")
-    description = (" ".join(parts) if parts else "")[:512]
+    full = (" ".join(parts) if parts else "")
+    if len(full) > 512:
+        description = full[:512].rsplit(' ', 1)[0]
+    else:
+        description = full
 
     recipe_data = {
         "name": scraper.title or "Untitled Recipe",
@@ -194,8 +203,12 @@ def main():
     args = parser.parse_args()
 
     # Defaults from tandoor-create-example.py if not set
-    tandoor_url = args.tandoor_url or "https://tandoor.d54.me"
-    api_token = args.api_token or "tda_d29fe11e_93d8_40ce_9e0b_00493cac8ffe"
+    tandoor_url = args.tandoor_url or os.getenv("TANDOOR_URL", "https://tandoor.d54.me")
+    api_token = args.api_token or os.getenv("TANDOOR_API_TOKEN")
+
+    if not api_token:
+        print("[ERROR] API token required. Set TANDOOR_API_TOKEN env var or pass --api-token.", file=sys.stderr)
+        raise SystemExit(1)
 
     from extract_recipe import FoodbagScraper, get_rendered_html
 

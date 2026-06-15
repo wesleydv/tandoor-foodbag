@@ -20,13 +20,25 @@ class FoodbagScraper:
 
     @property
     def total_time(self):
+        # Return time in minutes — no seconds conversion needed
         if not self.soup: return None
+        
         tag = self.soup.find(lambda t: t.name == 'p' and 'min. kookplezier' in t.text)
         if tag:
             import re as _re
             match = _re.search(r'(\d+)', tag.text)
-            return int(match.group(1)) * 60 if match else None
-        return None
+            return int(match.group(1)) if match else None
+        
+        # Fallback: sum prep + oven minutes (e.g. "10' min. bereidingstijd")
+        import re as _re
+        total = 0
+        for p_tag in self.soup.find_all('p'):
+            text = p_tag.text.strip()
+            m = _re.search(r'(\d+)\s*[\u2018\u2019\']?\s*min\.?\s*(voorbereiding|bereidingstijd|oventijd)', text, _re.IGNORECASE)
+            if m:
+                total += int(m.group(1))
+        
+        return total if total > 0 else None
 
     @property
     def subtitle(self):
