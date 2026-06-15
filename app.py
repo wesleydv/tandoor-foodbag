@@ -1,0 +1,305 @@
+import os
+import uuid
+import json
+import threading
+from flask import Flask, render_template_string, request, jsonify
+
+
+app = Flask(__name__)
+
+# Store pending import statuses by job ID
+import_statuses = {}
+
+
+HTML_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tandoor Recipe Import</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f7f7f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 520px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+        input[type="url"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input[type="url"]:focus {
+            border-color: #ff6b35;
+        }
+        button {
+            width: 100%;
+            margin-top: 16px;
+            padding: 14px;
+            background: #ff6b35;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .result {
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        .result.success { display: block; background: #e6f9ee; color: #1a7a3a; }
+        .result.error { display: block; background: #fde8e8; color: #c0392b; }
+        .result.info { display: block; background: #eef2fe; color: #3550a3; }
+        .result strong { display: block; font-size: 15px; margin-bottom: 6px; }
+        .result a { color: inherit; text-decoration: underline; font-weight: 600; }
+        .spinner {
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 2px solid rgba(106,136,253,0.3);
+            border-top-color: #3550a3;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tandoor Recipe Import</h1>
+        <p class="subtitle">Paste a recipe URL to import it into Tandoor</p>
+
+        <form id="import-form">
+            <input type="url" name="url" placeholder="https://foodbag.be/..." required>
+            <button type="submit" id="submit-btn">Import Recipe</button>
+        </form>
+
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('import-form');
+        const btn = document.getElementById('submit-btn');
+        const result = document.getElementById('result');
+        const input = form.querySelector('input');
+
+        function showResult(type, message) {
+            result.className = 'result ' + type;
+            if (type === 'info') {
+                result.innerHTML = '<strong>Importing...</strong>' + message;
+            } else if (type === 'success') {
+                result.innerHTML = '<strong>Recipe imported successfully!</strong><a href="' + message.link + '" target="_blank" rel="noopener">' + message.text + '</a>';
+            } else {
+                result.innerHTML = '<strong>Error</strong>' + message;
+            }
+            btn.disabled = false;
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = input.value.trim();
+            if (!url) return;
+
+            result.className = 'result';
+            btn.disabled = true;
+            showResult('info', '<span class="spinner"></span> Scraping recipe and importing...');
+
+            try {
+                const res = await fetch('/import', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url})
+                });
+                const data = await res.json();
+
+                if (data.status === 'queued') {
+                    pollStatus(data.id);
+                } else if (!res.ok) {
+                    showResult('error', data.error || 'Request failed');
+                } else {
+                    showResult('success', {
+                        text: "Open recipe #" + data.recipe_id + " in Tandoor",
+                        link: data.recipe_url
+                    });
+                }
+            } catch (err) {
+                showResult('error', 'Could not reach the server. Make sure it is running.');
+            }
+        });
+
+        async function pollStatus(id) {
+            for (let i = 0; i < 60; i++) {
+                await new Promise(r => setTimeout(r, 2000));
+                const res = await fetch('/import/status/' + id);
+                const data = await res.json();
+
+                if (data.status === 'running' || data.status === 'queued') {
+                    showResult('info', '<span class="spinner"></span> Wait a moment...');
+                    continue;
+                }
+                if (data.status === 'complete') {
+                    if (data.success) {
+                        showResult('success', {
+                            text: "Open recipe #" + data.recipe_id + " in Tandoor",
+                            link: data.recipe_url
+                        });
+                    } else {
+                        showResult('error', data.error || 'Import failed');
+                    }
+                    return;
+                }
+                if (data.status === 'error' || !data.status) {
+                    showResult('error', data.error || 'Unknown error occurred');
+                    return;
+                }
+            }
+            showResult('error', 'Import timed out. Try again later.');
+        }
+    </script>
+</body>
+</html>"""
+
+
+@app.route("/")
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+
+@app.route("/import", methods=["POST"])
+def import_recipe():
+    data = request.get_json() or {}
+    url = data.get("url", "").strip()
+
+    if not url:
+        return jsonify({"error": "No URL provided."}), 400
+
+    import_id = str(uuid.uuid4())[:8]
+
+    def run_import():
+        import_statuses[import_id] = {**import_statuses[import_id], "status": "running"}
+        try:
+            from extract_recipe import FoodbagScraper, get_rendered_html
+            html = get_rendered_html(url)
+            scraper = FoodbagScraper(url=url, html=html)
+        except Exception as e:
+            import_statuses[import_id]["status"] = "complete"
+            import_statuses[import_id]["success"] = False
+            import_statuses[import_id]["error"] = f"Scraping failed: {e}"
+            return
+
+        try:
+            from create_tandoor_recipe import scraped_to_tandoor, TandoorClient
+            tandoor_url = app.config["TANDOOR_URL"]
+            api_token = app.config["API_TOKEN"]
+
+            recipe_data, image_url = scraped_to_tandoor(scraper, html)
+            client = TandoorClient(tandoor_url, api_token)
+            recipe_id = client.create_recipe(recipe_data)
+
+            if image_url:
+                try:
+                    client.upload_image(recipe_id, image_url)
+                except Exception as img_err:
+                    pass  # non-critical
+
+        except Exception as e:
+            import_statuses[import_id]["status"] = "complete"
+            import_statuses[import_id]["success"] = False
+            import_statuses[import_id]["error"] = f"Recipe creation failed: {e}"
+            return
+
+        recipe_url = f"{tandoor_url.rstrip('/')}/recipe/{recipe_id}/"
+        import_statuses[import_id] = {
+            "status": "complete",
+            "success": True,
+            "recipe_id": recipe_id,
+            "recipe_url": recipe_url,
+        }
+
+    import_statuses[import_id] = {"status": "queued"}
+    thread = threading.Thread(target=run_import, daemon=True)
+    thread.start()
+
+    return jsonify({"status": "queued", "id": import_id})
+
+
+@app.route("/import/status/<import_id>")
+def import_status(import_id):
+    status = import_statuses.get(import_id, {"status": "error", "error": "Unknown job ID"})
+    return jsonify(status)
+
+
+def _read_env(path=".env"):
+    data = {}
+    for env_path in [path, os.path.join(os.path.dirname(__file__), path)]:
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    data[k.strip()] = v.strip()
+            break
+        except FileNotFoundError:
+            continue
+    return data
+
+
+def get_config():
+    env_vars = _read_env()
+
+    tandoor_url = os.getenv("TANDOOR_URL") or env_vars.get("TANDOOR_URL", "https://tandoor.d54.me")
+    api_token = os.getenv("TANDOOR_API_TOKEN") or env_vars.get("TANDOOR_API_TOKEN", "")
+    if not api_token:
+        raise RuntimeError("TANDOOR_API_TOKEN is not set. Create a .env file with your Tandoor API token.")
+
+    return tandoor_url, api_token
+
+
+if __name__ == "__main__":
+    tandoor_url, api_token = get_config()
+    app.config["TANDOOR_URL"] = tandoor_url
+    app.config["API_TOKEN"] = api_token
+
+    import time
+    print(f"Starting server at http://127.0.0.1:9615")
+    print(f"Tandoor URL: {tandoor_url}")
+    time.sleep(0.5)
+    import webbrowser
+    webbrowser.open("http://127.0.0.1:9615")
+    app.run(host="127.0.0.1", port=9615, debug=False)
