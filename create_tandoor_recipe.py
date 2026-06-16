@@ -206,7 +206,7 @@ def main():
     args = parser.parse_args()
 
     # Defaults from tandoor-create-example.py if not set
-    tandoor_url = args.tandoor_url or os.getenv("TANDOOR_URL", "https://tandoor.d54.me")
+    tandoor_url = args.tandoor_url or os.getenv("TANDOOR_URL")
     api_token = args.api_token or os.getenv("TANDOOR_API_TOKEN")
 
     if not api_token:

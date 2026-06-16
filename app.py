@@ -352,7 +352,7 @@ def import_status(import_id):
 
 
 def get_config():
-    tandoor_url = os.getenv("TANDOOR_URL", "https://tandoor.d54.me")
+    tandoor_url = os.getenv("TANDOOR_URL")
     api_token = os.getenv("TANDOOR_API_TOKEN", "")
     if not api_token:
         raise RuntimeError("TANDOOR_API_TOKEN is not set. Create a .env file with your Tandoor API token.")
