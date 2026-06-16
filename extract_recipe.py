@@ -273,6 +273,45 @@ def get_rendered_html(url):
             if cookie_btn.is_visible():
                 cookie_btn.click()
                 print("Cookie banner accepted.", file=sys.stderr)
+            
+            # Extra wait to ensure the overlay disappears and doesn't intercept clicks
+            page.wait_for_selector('#onetrust-consent-sdk', state='hidden', timeout=10000)
+            # Set portions to 4 via React Fiber state injection
+            try:
+                print("Attempting to set portions to 4 via JS injection...", file=sys.stderr)
+                
+                page.wait_for_selector('img[alt="increase amount"]', timeout=10000)
+                
+                page.evaluate("""() => {
+                  const plusBtn = Array.from(document.querySelectorAll('button[type="button"]'))
+                    .find(b => b.querySelector('img[alt="increase amount"]'));
+
+                  if (!plusBtn) throw new Error("Plus button not found");
+
+                  const fiberKey = Object.keys(plusBtn).find(k => k.startsWith('__reactFiber'));
+                  if (!fiberKey) throw new Error("React Fiber key not found on button");
+
+                  let node = plusBtn[fiberKey].return;
+                  let limit = 20;
+
+                  while (node && limit-- > 0) {
+                    let hook = node.memoizedState;
+                    while (hook) {
+                      if (typeof hook.memoizedState === 'number' 
+                          && hook.memoizedState >= 1 
+                          && hook.memoizedState <= 10 
+                          && hook.queue?.dispatch) {
+                        hook.queue.dispatch(4); // set to 4 portions
+                      }
+                      hook = hook.next;
+                    }
+                    node = node.return;
+                  }
+                }""")
+                page.wait_for_timeout(500)
+                print("Portion injection command sent.", file=sys.stderr)
+            except Exception as e:
+                print(f"Could not set portions via injection: {e}", file=sys.stderr)
 
             # Wait for full recipe hydration including body text and images
             ready = False
