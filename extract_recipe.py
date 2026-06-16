@@ -1,7 +1,11 @@
 import sys
 import json
 import argparse
+import os
+from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
+
+load_dotenv()
 
 class FoodbagScraper:
     """Custom scraper for foodbag.be"""
@@ -260,7 +264,8 @@ class FoodbagScraper:
 
 def get_rendered_html(url):
     with sync_playwright() as p:
-        browser = p.chromium.connect('ws://192.168.15.166:3000/')
+        server_url = os.getenv("PLAYWRIGHT_SERVER_URL", "ws://playwright:3000/")
+        browser = p.chromium.connect(server_url)
         context = browser.new_context()
         page = context.new_page()
 

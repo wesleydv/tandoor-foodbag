@@ -1,2 +1,6 @@
+flask
+requests
+beautifulsoup4
 playwright
 recipe-scrapers
+python-dotenv

@@ -3,6 +3,11 @@ import uuid
 import json
 import threading
 from flask import Flask, render_template_string, request, jsonify
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = Flask(__name__)
 
 
 app = Flask(__name__)
@@ -346,32 +351,14 @@ def import_status(import_id):
     return jsonify(status)
 
 
-def _read_env(path=".env"):
-    data = {}
-    for env_path in [path, os.path.join(os.path.dirname(__file__), path)]:
-        try:
-            with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    k, v = line.split("=", 1)
-                    data[k.strip()] = v.strip()
-            break
-        except FileNotFoundError:
-            continue
-    return data
-
-
 def get_config():
-    env_vars = _read_env()
-
-    tandoor_url = os.getenv("TANDOOR_URL") or env_vars.get("TANDOOR_URL", "https://tandoor.d54.me")
-    api_token = os.getenv("TANDOOR_API_TOKEN") or env_vars.get("TANDOOR_API_TOKEN", "")
+    tandoor_url = os.getenv("TANDOOR_URL", "https://tandoor.d54.me")
+    api_token = os.getenv("TANDOOR_API_TOKEN", "")
     if not api_token:
         raise RuntimeError("TANDOOR_API_TOKEN is not set. Create a .env file with your Tandoor API token.")
 
     return tandoor_url, api_token
+
 
 
 if __name__ == "__main__":

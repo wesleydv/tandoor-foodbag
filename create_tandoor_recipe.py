@@ -6,6 +6,9 @@ import argparse
 import io
 import requests
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Tandoor credentials — override via env vars or CLI flags
 
