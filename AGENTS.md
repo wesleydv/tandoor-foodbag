@@ -29,13 +29,20 @@ python create_tandoor_recipe.py <url> --tandoor-url <TANDOOR_URL> --api-token <T
 
 ## Scraping details
 - Uses Playwright (`ws://192.168.15.166:3000/`) for the remote Chromium browser — fails if this endpoint is unreachable.
-- Accepts Onetrust cookie banners automatically. Waits for recipe hydration (Ingredients header or og:image meta tag).
+- Accepts Onetrust cookie banners automatically. Sets recipe portions to 4 via React Fiber state injection before extraction. Waits for recipe hydration (Ingredients header or og:image meta tag).
 - FoodbagScraper properties: `title`, `total_time` (minutes), `subtitle`, `description`, `tip`, `image_url`, `ingredients`, `instructions`.
 
 ## Task Planning
 Before starting any multi-step task, ALWAYS use the `todowrite` tool to create a structured todo list.
 Update each item with `todowrite` as you complete it (set status to "completed").
 Never skip this step, even for short tasks.
+
+## Update AGENTS.md before commit
+
+Keep it current — not historical. Git and commit messages handle history.
+
+Do not accumulate a changelog here. When something changes, update the
+relevant section in place. The goal is an accurate snapshot of right now.
 
 ## Rules
 - Never commit, push, or create PRs unless explicitly requested by the user.
