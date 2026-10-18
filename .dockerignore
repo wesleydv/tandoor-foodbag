@@ -1,0 +1,5 @@
+.env
+.git
+.opencode
+__pycache__/
+*.pyc

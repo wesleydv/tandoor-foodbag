@@ -9,10 +9,10 @@ services:
       - PLAYWRIGHT_SERVER_URL=ws://playwright:3967/
     depends_on:
       - playwright
+    restart: unless-stopped
 
   playwright:
+    # Keep in step with the playwright pin in requirements.txt (client and server must match)
     image: mcr.microsoft.com/playwright:v1.60.0-noble
     command: npx -y playwright@1.60.0 run-server --port 3967 --host 0.0.0.0
-    ports:
-      - "3967:3967"
     restart: unless-stopped

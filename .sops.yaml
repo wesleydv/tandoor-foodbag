@@ -1,0 +1,7 @@
+# SOPS recipients: Wesley (Mac) + alfred (host that runs this app).
+# Same keys as wesleydv/servers/.sops.yaml — see its gitops brief, D3/D9.
+creation_rules:
+  - path_regex: secrets\.enc\.env$
+    age: >-
+      age1l7aryk92zufzl96mrsz5jh3ryu5lk8hxeavn6p9fr32d7sf88v9swn0q44,
+      age1ej9cpyapk6sm27qlsqcfta2v0vhsa5d93lv4cfxmtyxux4j6hghswpgvn6

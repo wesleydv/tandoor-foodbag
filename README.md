@@ -26,7 +26,19 @@ The easiest way to get started is using Docker Compose, which sets up both the a
 
 4.  **Use it**:
     - **Web UI**: Open `http://localhost:9615` in your browser.
-    - **CLI**: Run via `docker exec -it tandoor-foodbag-app python create_tandoor_recipe.py <url>`.
+    - **CLI**: Run via `docker exec -it tandoor-foodbag-app-1 python create_tandoor_recipe.py <url>`.
+
+## 🔐 Deploying with SOPS secrets
+
+The maintainer's host keeps the Tandoor token in `secrets.enc.env`, encrypted with [SOPS](https://github.com/getsops/sops) + age (recipients in `.sops.yaml`). A deploy from the checkout is:
+
+```bash
+git pull
+sudo SOPS_AGE_KEY_FILE=/opt/doco-cd/keys/age.key sops decrypt secrets.enc.env > .env
+docker compose up -d --build
+```
+
+The Playwright client (`requirements.txt`) and server image (`compose.yaml`) must stay on the same version; bump them together.
 
 ## 🛠️ Manual Setup
 

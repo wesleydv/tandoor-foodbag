@@ -1,6 +1,6 @@
 flask
 requests
 beautifulsoup4
-playwright
+playwright==1.60.0  # must match the playwright server image in compose.yaml
 recipe-scrapers
 python-dotenv
